@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace File.TestLogger
 {
-    internal static class TestParameterNames
+    internal static class ParameterNames
     {
         public const string Append = nameof(Append);
 

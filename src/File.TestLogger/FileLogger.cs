@@ -1,21 +1,17 @@
 ﻿using Microsoft.VisualStudio.TestPlatform.ObjectModel;
 using Microsoft.VisualStudio.TestPlatform.ObjectModel.Client;
 using Microsoft.VisualStudio.TestPlatform.ObjectModel.Logging;
-using Microsoft.VisualStudio.TestPlatform.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
-using System.Globalization;
 using System.IO;
-using System.Reflection;
 using System.Threading.Tasks.Dataflow;
 
 namespace File.TestLogger
 {
     [FriendlyName("File")]
     [ExtensionUri("logger://Microsoft/TestPlatform/FileLogger/v1")]
-    internal class FileLogger : ITestLoggerWithParameters
+    public class FileLogger : ITestLoggerWithParameters
     {
         private const string TestMessageFormattingPrefix = " ";
         private const string TestResultPrefix = "  ";
@@ -51,13 +47,13 @@ namespace File.TestLogger
                 events,
                 new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
                 {
-                    [TestParameterNames.TestRunDirectory] = testRunDirectory
+                    [ParameterNames.TestRunDirectory] = testRunDirectory
                 });
         }
 
-        public void Initialize(TestLoggerEvents events, Dictionary<string, string?> parameters, TextWriter? fileWriter, TextWriter? consoleOut, TextWriter? consoleError)
+        internal void Initialize(TestLoggerEvents events, Dictionary<string, string?> parameters, TextWriter? fileWriter, TextWriter? consoleOut, TextWriter? consoleError)
         {
-            if (parameters.TryGetValue(TestParameterNames.Debug, out string? debugString) && bool.TryParse(debugString, out bool debug) && debug)
+            if (parameters.TryGetValue(ParameterNames.Debug, out string? debugString) && bool.TryParse(debugString, out bool debug) && debug)
             {
                 System.Diagnostics.Debugger.Launch();
             }
@@ -76,23 +72,23 @@ namespace File.TestLogger
 
         internal void SetProperties(Dictionary<string, string?> parameters)
         {
-            if (parameters.TryGetValue(TestParameterNames.Append, out string? appendString) && bool.TryParse(appendString, out bool append))
+            if (parameters.TryGetValue(ParameterNames.Append, out string? appendString) && bool.TryParse(appendString, out bool append))
             {
                 Append = append;
             }
 
-            if (parameters.TryGetValue(TestParameterNames.Verbosity, out string? verbosityString) && Enum.TryParse(verbosityString, out Verbosity verbosity))
+            if (parameters.TryGetValue(ParameterNames.Verbosity, out string? verbosityString) && Enum.TryParse(verbosityString, ignoreCase: true, out Verbosity verbosity))
             {
                 VerbosityLevel = verbosity;
             }
 
-            if (parameters.TryGetValue(TestParameterNames.Path, out string? path) && !string.IsNullOrWhiteSpace(path))
+            if (parameters.TryGetValue(ParameterNames.Path, out string? path) && !string.IsNullOrWhiteSpace(path))
             {
                 LogFile = new FileInfo(Path.GetFullPath(path));
             }
             else
             {
-                if (!parameters.TryGetValue(TestParameterNames.TestRunDirectory, out string? testRunDirectory) || string.IsNullOrWhiteSpace(testRunDirectory))
+                if (!parameters.TryGetValue(ParameterNames.TestRunDirectory, out string? testRunDirectory) || string.IsNullOrWhiteSpace(testRunDirectory))
                 {
                     testRunDirectory = Environment.CurrentDirectory;
                 }
@@ -294,6 +290,16 @@ namespace File.TestLogger
                 }
                 else
                 {
+                    bool failed = args.TestRunStatistics?.Stats?.TryGetValue(TestOutcome.Failed, out long failCount) == true && failCount > 0;
+
+                    if (failed)
+                    {
+                        FileWriter.WriteLine("Test run failed.");
+                    }
+                    else
+                    {
+                        FileWriter.WriteLine("Test run successful.");
+                    }
                 }
 
                 if (VerbosityLevel <= Verbosity.Minimal)
