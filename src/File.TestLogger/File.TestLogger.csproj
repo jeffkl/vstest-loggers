@@ -8,4 +8,7 @@
     <PackageReference Include="Microsoft.TestPlatform.ObjectModel" ExcludeAssets="Runtime" />
     <PackageReference Include="System.Threading.Tasks.Dataflow" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="version.json" />
+  </ItemGroup>
 </Project>
