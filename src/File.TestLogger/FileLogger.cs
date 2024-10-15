@@ -16,10 +16,24 @@ namespace File.TestLogger
         private const string TestMessageFormattingPrefix = " ";
         private const string TestResultPrefix = "  ";
         private const string TestResultSuffix = " ";
-        private ActionBlock<EventArgs> _events;
+
+        private readonly IEnvironmentProvider _environmentProvider;
+
+        private readonly ActionBlock<EventArgs> _events;
 
         public FileLogger()
+            : this(SystemEnvironmentProvider.Instance)
         {
+        }
+
+        internal FileLogger(IEnvironmentProvider environmentProvider, TextWriter? fileWriter = null, TextWriter? consoleOut = null, TextWriter? consoleError = null)
+        {
+            _environmentProvider = environmentProvider;
+
+            FileWriter = fileWriter;
+            ConsoleOut = consoleOut ?? Console.Out;
+            ConsoleError = consoleError ?? Console.Error;
+
             _events = new ActionBlock<EventArgs>(
                 ProcessEvent,
                 new ExecutionDataflowBlockOptions()
@@ -28,17 +42,36 @@ namespace File.TestLogger
                 });
         }
 
-        public bool Append { get; set; }
+        internal bool Append { get; private set; }
 
-        public TextWriter? ConsoleError { get; set; }
-        public TextWriter? ConsoleOut { get; set; }
-        public TextWriter? FileWriter { get; set; }
-        public FileInfo? LogFile { get; set; }
-        public Verbosity VerbosityLevel { get; set; } = Verbosity.Normal;
+        internal TextWriter ConsoleError { get; private set; }
+
+        internal TextWriter ConsoleOut { get; private set; }
+
+        internal TextWriter? FileWriter { get; private set; }
+
+        internal FileInfo? LogFile { get; private set; }
+
+        internal Verbosity VerbosityLevel { get; private set; } = Verbosity.Normal;
 
         public void Initialize(TestLoggerEvents events, Dictionary<string, string?> parameters)
         {
-            Initialize(events, parameters, fileWriter: null, consoleOut: null, consoleError: null);
+            if (parameters.TryGetValue(ParameterNames.Debug, out string? debugString) && bool.TryParse(debugString, out bool debug) && debug)
+            {
+                System.Diagnostics.Debugger.Launch();
+            }
+
+            SetProperties(parameters);
+
+            if (FileWriter == null)
+            {
+                FileWriter = new StreamWriter(new FileStream(LogFile!.FullName, Append ? FileMode.Append : FileMode.Create));
+            }
+
+            events.DiscoveryMessage += (_, args) => _events.Post(args);
+            events.TestResult += (_, args) => _events.Post(args);
+            events.TestRunComplete += (_, args) => Shutdown(args);
+            events.TestRunMessage += (_, args) => _events.Post(args);
         }
 
         public void Initialize(TestLoggerEvents events, string testRunDirectory)
@@ -49,25 +82,6 @@ namespace File.TestLogger
                 {
                     [ParameterNames.TestRunDirectory] = testRunDirectory
                 });
-        }
-
-        internal void Initialize(TestLoggerEvents events, Dictionary<string, string?> parameters, TextWriter? fileWriter, TextWriter? consoleOut, TextWriter? consoleError)
-        {
-            if (parameters.TryGetValue(ParameterNames.Debug, out string? debugString) && bool.TryParse(debugString, out bool debug) && debug)
-            {
-                System.Diagnostics.Debugger.Launch();
-            }
-
-            SetProperties(parameters);
-
-            FileWriter = fileWriter ?? new StreamWriter(new FileStream(LogFile!.FullName, Append ? FileMode.Append : FileMode.Create));
-            ConsoleOut = consoleOut ?? Console.Out;
-            ConsoleError = consoleError ?? Console.Error;
-
-            events.DiscoveryMessage += (_, args) => _events.Post(args);
-            events.TestResult += (_, args) => _events.Post(args);
-            events.TestRunComplete += (_, args) => Shutdown(args);
-            events.TestRunMessage += (_, args) => _events.Post(args);
         }
 
         internal void SetProperties(Dictionary<string, string?> parameters)
@@ -90,10 +104,10 @@ namespace File.TestLogger
             {
                 if (!parameters.TryGetValue(ParameterNames.TestRunDirectory, out string? testRunDirectory) || string.IsNullOrWhiteSpace(testRunDirectory))
                 {
-                    testRunDirectory = Environment.CurrentDirectory;
+                    testRunDirectory = _environmentProvider.CurrentDirectory;
                 }
 
-                LogFile = new FileInfo(Path.Combine(testRunDirectory, "TestLog.txt"));
+                LogFile = new FileInfo(Path.Combine(testRunDirectory, "vstest.log"));
             }
 
             LogFile.Directory?.Create();
