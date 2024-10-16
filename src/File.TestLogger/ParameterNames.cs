@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace File.TestLogger
+﻿namespace File.TestLogger
 {
     internal static class ParameterNames
     {
@@ -12,7 +6,9 @@ namespace File.TestLogger
 
         public const string Debug = nameof(Debug);
 
-        public const string Path = nameof(Path);
+        public const string LogFileName = nameof(LogFileName);
+
+        public const string TargetFramework = nameof(TargetFramework);
 
         public const string TestRunDirectory = nameof(TestRunDirectory);
 
