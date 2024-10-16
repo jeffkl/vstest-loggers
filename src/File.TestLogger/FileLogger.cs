@@ -4,10 +4,8 @@ using Microsoft.VisualStudio.TestPlatform.ObjectModel.Logging;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks.Dataflow;
 
 namespace File.TestLogger
@@ -24,7 +22,7 @@ namespace File.TestLogger
 
         private readonly ActionBlock<EventArgs> _events;
 
-        private Dictionary<string, TestSourceResult> _resultsByTestSource = new(capacity: 4096);
+        private Dictionary<string, TestSourceResult>? _resultsByTestSource;
 
         public FileLogger()
             : this(SystemEnvironmentProvider.Instance)
@@ -84,7 +82,7 @@ namespace File.TestLogger
         {
             Initialize(
                 events,
-                new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                new Dictionary<string, string?>(capacity: 1, StringComparer.OrdinalIgnoreCase)
                 {
                     [ParameterNames.TestRunDirectory] = testRunDirectory
                 });
@@ -153,6 +151,8 @@ namespace File.TestLogger
 
             if (VerbosityLevel <= Verbosity.Minimal)
             {
+                _resultsByTestSource ??= new(capacity: 4096);
+
                 if (!_resultsByTestSource.TryGetValue(args.Result.TestCase.Source, out testSourceResult))
                 {
                     testSourceResult = new TestSourceResult();
@@ -371,6 +371,7 @@ namespace File.TestLogger
             {
                 if (args.IsCanceled)
                 {
+                    // TODO: Does this happen?
                 }
                 else if (args.IsAborted)
                 {
@@ -384,11 +385,8 @@ namespace File.TestLogger
                         FileWriter.WriteLine(args.Error.ToString());
                     }
                 }
-                else
-                {
-                }
 
-                if (VerbosityLevel <= Verbosity.Minimal)
+                if (VerbosityLevel <= Verbosity.Minimal && _resultsByTestSource != null)
                 {
                     foreach (KeyValuePair<string, TestSourceResult> item in _resultsByTestSource)
                     {
