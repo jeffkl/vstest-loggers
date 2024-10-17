@@ -1,15 +1,15 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net472;net8.0</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <Description>Provides a logger for the Visual Studio Test Platform that writes output to a file.</Description>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="EnvironmentAbstractions" />
     <PackageReference Include="EnvironmentAbstractions.BannedApiAnalyzer" PrivateAssets="All" />
+    <PackageReference Include="Microsoft.Bcl.TimeProvider" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
     <PackageReference Include="Microsoft.TestPlatform.ObjectModel" ExcludeAssets="Runtime" />
     <PackageReference Include="System.IO.Abstractions" />
-    <PackageReference Include="System.Threading.Tasks.Dataflow" />
   </ItemGroup>
   <ItemGroup>
     <None Include="README.md" />

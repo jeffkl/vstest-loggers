@@ -4,16 +4,16 @@ using Microsoft.VisualStudio.TestPlatform.ObjectModel.Logging;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.IO.Abstractions;
 using System.Linq;
-using System.Threading.Tasks.Dataflow;
 
 namespace File.TestLogger
 {
     [FriendlyName("File")]
     [ExtensionUri("logger://Microsoft/TestPlatform/FileLogger/v1")]
-    public class FileLogger : ITestLoggerWithParameters
+    public class FileLogger : ITestLoggerWithParameters, IDisposable
     {
         private const string TestMessageFormattingPrefix = " ";
         private const string TestResultPrefix = "  ";
@@ -21,39 +21,36 @@ namespace File.TestLogger
 
         private readonly IEnvironmentProvider _environmentProvider;
 
-        private readonly ActionBlock<EventArgs> _events;
         private readonly IFileSystem _fileSystem;
+
+        private readonly TimeProvider _timeProvider;
+
         private Dictionary<string, TestSourceResult>? _resultsByTestSource;
 
+        private TestLoggerEvents? _testLoggerEvents;
+
         public FileLogger()
-            : this(SystemEnvironmentProvider.Instance, new FileSystem())
+            : this(SystemEnvironmentProvider.Instance, new FileSystem(), TimeProvider.System)
         {
         }
 
-        internal FileLogger(IEnvironmentProvider environmentProvider, IFileSystem fileSystem, TextWriter? fileWriter = null, TextWriter? consoleOut = null, TextWriter? consoleError = null)
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+
+        internal FileLogger(IEnvironmentProvider environmentProvider, IFileSystem fileSystem, TimeProvider timeProvider)
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
         {
             _environmentProvider = environmentProvider ?? throw new ArgumentNullException(nameof(environmentProvider));
             _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
-
-            FileWriter = fileWriter;
-            ConsoleOut = consoleOut ?? Console.Out;
-            ConsoleError = consoleError ?? Console.Error;
-
-            _events = new ActionBlock<EventArgs>(
-                ProcessEvent,
-                new ExecutionDataflowBlockOptions()
-                {
-                    MaxDegreeOfParallelism = 1,
-                });
+            _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         }
 
-        internal bool Append { get; private set; }
+        internal bool? Append { get; private set; }
 
-        internal TextWriter ConsoleError { get; private set; }
+        internal TextWriter ConsoleError { get; set; } = Console.Error;
 
-        internal TextWriter ConsoleOut { get; private set; }
+        internal TextWriter ConsoleOut { get; set; } = Console.Out;
 
-        internal TextWriter? FileWriter { get; private set; }
+        internal TextWriter FileWriter { get; private set; }
 
         internal IFileInfo? LogFile { get; private set; }
 
@@ -63,36 +60,21 @@ namespace File.TestLogger
 
         internal Verbosity VerbosityLevel { get; private set; } = Verbosity.Normal;
 
-        public void Initialize(TestLoggerEvents events, Dictionary<string, string?> parameters)
+        public void Dispose()
         {
+            FileWriter?.Dispose();
+        }
+
+        [MemberNotNull(nameof(FileWriter))]
+        public void Initialize(TestLoggerEvents testLoggerEvents, Dictionary<string, string?> parameters)
+        {
+            _testLoggerEvents = testLoggerEvents;
+
             if (parameters.TryGetValue(ParameterNames.Debug, out string? debugString) && bool.TryParse(debugString, out bool debug) && debug)
             {
                 System.Diagnostics.Debugger.Launch();
             }
 
-            SetProperties(parameters);
-            
-            FileWriter ??= new StreamWriter(_fileSystem.FileStream.New(LogFile!.FullName, Append ? FileMode.Append : FileMode.Create));
-
-            events.DiscoveryMessage += (_, args) => _events.Post(args);
-            events.TestResult += (_, args) => _events.Post(args);
-            events.TestRunComplete += (_, args) => Shutdown(args);
-            events.TestRunMessage += (_, args) => _events.Post(args);
-            events.TestRunStart += (_, args) => _events.Post(args);
-        }
-
-        public void Initialize(TestLoggerEvents events, string testRunDirectory)
-        {
-            Initialize(
-                events,
-                new Dictionary<string, string?>(capacity: 1, StringComparer.OrdinalIgnoreCase)
-                {
-                    [ParameterNames.TestRunDirectory] = testRunDirectory
-                });
-        }
-
-        internal void SetProperties(Dictionary<string, string?> parameters)
-        {
             if (!parameters.TryGetValue(ParameterNames.TestRunDirectory, out string? testRunDirectory) || string.IsNullOrWhiteSpace(testRunDirectory))
             {
                 testRunDirectory = _environmentProvider.CurrentDirectory;
@@ -112,7 +94,7 @@ namespace File.TestLogger
 
             if (!parameters.TryGetValue(ParameterNames.LogFileName, out string? logFileName) || string.IsNullOrWhiteSpace(logFileName))
             {
-                logFileName = string.Format(Strings.DefaultLogFileName, _environmentProvider.UserName, _environmentProvider.MachineName, DateTime.Now);
+                logFileName = string.Format(Strings.DefaultLogFileName, _environmentProvider.UserName, _environmentProvider.MachineName, _timeProvider.GetLocalNow());
             }
 
             LogFile = _fileSystem.FileInfo.New(Path.Combine(TestRunDirectory, logFileName));
@@ -123,33 +105,28 @@ namespace File.TestLogger
             }
 
             LogFile.Directory?.Create();
+
+            FileWriter = new StreamWriter(_fileSystem.FileStream.New(LogFile!.FullName, Append == true ? FileMode.Append : FileMode.Create, FileAccess.Write));
+
+            testLoggerEvents.DiscoveryMessage += TestRunMessageEventHandler;
+            testLoggerEvents.TestResult += TestResultEventHandler;
+            testLoggerEvents.TestRunComplete += TestRunCompleteEventHandler;
+            testLoggerEvents.TestRunMessage += TestRunMessageEventHandler;
+            testLoggerEvents.TestRunStart += TestRunStartEventHandler;
         }
 
-        private void ProcessEvent(EventArgs e)
+        public void Initialize(TestLoggerEvents events, string testRunDirectory)
         {
-            switch (e)
-            {
-                case TestRunMessageEventArgs args:
-                    ProcessTestRunMessageEvent(args);
-                    break;
-
-                case TestResultEventArgs args:
-                    ProcessTestResultEvent(args);
-                    break;
-
-                case TestRunStartEventArgs args:
-                    ProcessTestRunStartEvent(args);
-                    break;
-            }
+            Initialize(
+                events,
+                new Dictionary<string, string?>(capacity: 1, StringComparer.OrdinalIgnoreCase)
+                {
+                    [ParameterNames.TestRunDirectory] = testRunDirectory
+                });
         }
 
-        private void ProcessTestResultEvent(TestResultEventArgs args)
+        private void TestResultEventHandler(object? _, TestResultEventArgs args)
         {
-            if (FileWriter == null)
-            {
-                return;
-            }
-
             TestSourceResult? testSourceResult = null;
 
             if (VerbosityLevel <= Verbosity.Minimal)
@@ -181,7 +158,7 @@ namespace File.TestLogger
                 case TestOutcome.Passed:
                     if (testSourceResult != null)
                     {
-                        testSourceResult.Results[0]++;
+                        testSourceResult.Results[TestSourceResult.IndexPassed]++;
                     }
 
                     if (VerbosityLevel >= Verbosity.Normal)
@@ -193,7 +170,7 @@ namespace File.TestLogger
                 case TestOutcome.Failed:
                     if (testSourceResult != null)
                     {
-                        testSourceResult.Results[1]++;
+                        testSourceResult.Results[TestSourceResult.IndexFailed]++;
                     }
 
                     if (VerbosityLevel >= Verbosity.Minimal)
@@ -205,7 +182,7 @@ namespace File.TestLogger
                 case TestOutcome.Skipped:
                     if (testSourceResult != null)
                     {
-                        testSourceResult.Results[2]++;
+                        testSourceResult.Results[TestSourceResult.IndexSkipped]++;
                     }
                     if (VerbosityLevel >= Verbosity.Minimal)
                     {
@@ -220,11 +197,6 @@ namespace File.TestLogger
 
             void ProcessTestResult(TestResult testResult, string outcome)
             {
-                if (FileWriter == null)
-                {
-                    return;
-                }
-
                 FileWriter.Write(TestResultPrefix);
                 FileWriter.Write(outcome);
                 FileWriter.Write(TestResultSuffix);
@@ -306,68 +278,15 @@ namespace File.TestLogger
             }
         }
 
-        private void ProcessTestRunMessageEvent(TestRunMessageEventArgs args)
+        private void TestRunCompleteEventHandler(object? _, TestRunCompleteEventArgs args)
         {
-            if (FileWriter == null)
+            if (_testLoggerEvents != null)
             {
-                return;
-            }
-
-            switch (args.Level)
-            {
-                case TestMessageLevel.Informational:
-                    if (VerbosityLevel >= Verbosity.Normal)
-                    {
-                        FileWriter.WriteLine(args.Message);
-                    }
-                    break;
-
-                case TestMessageLevel.Warning:
-                    if (VerbosityLevel >= Verbosity.Minimal)
-                    {
-                        FileWriter.WriteLine(args.Message);
-                    }
-                    break;
-
-                case TestMessageLevel.Error:
-                    FileWriter.WriteLine(args.Message);
-                    break;
-            }
-        }
-
-        private void ProcessTestRunStartEvent(TestRunStartEventArgs args)
-        {
-            if (FileWriter == null)
-            {
-                return;
-            }
-
-            FileWriter.WriteLine(Strings.Message_StartingTestExecution);
-
-            List<string>? sources = args.TestRunCriteria.Sources?.ToList();
-
-            if (sources?.Count > 0)
-            {
-                FileWriter.WriteLine(Strings.Message_TestSourcesToRun, sources.Count);
-
-                if (VerbosityLevel >= Verbosity.Detailed)
-                {
-                    foreach (string source in sources)
-                    {
-                        FileWriter.WriteLine(source);
-                    }
-                }
-            }
-        }
-
-        private void Shutdown(TestRunCompleteEventArgs args)
-        {
-            _events.Complete();
-            _events.Completion.Wait();
-
-            if (FileWriter == null)
-            {
-                return;
+                _testLoggerEvents.DiscoveryMessage -= TestRunMessageEventHandler;
+                _testLoggerEvents.TestResult -= TestResultEventHandler;
+                _testLoggerEvents.TestRunComplete -= TestRunCompleteEventHandler;
+                _testLoggerEvents.TestRunMessage -= TestRunMessageEventHandler;
+                _testLoggerEvents.TestRunStart -= TestRunStartEventHandler;
             }
 
             try
@@ -395,10 +314,10 @@ namespace File.TestLogger
                     {
                         TestSourceResult testSourceResult = item.Value;
 
-                        int passCount = testSourceResult.Results[0];
-                        int failedCount = testSourceResult.Results[1];
-                        int skippedCount = testSourceResult.Results[2];
-                        int totalCount = testSourceResult.Results[3];
+                        int passCount = testSourceResult.Results[TestSourceResult.IndexPassed];
+                        int failedCount = testSourceResult.Results[TestSourceResult.IndexFailed];
+                        int skippedCount = testSourceResult.Results[TestSourceResult.IndexSkipped];
+                        int totalCount = testSourceResult.Results[TestSourceResult.IndexTotal];
 
                         if (failedCount > 0)
                         {
@@ -469,19 +388,78 @@ namespace File.TestLogger
             }
             finally
             {
-                FileWriter?.Dispose();
+                Dispose();
             }
 
             ConsoleOut?.WriteLine(Strings.Message_LogFilePath, LogFile?.FullName);
+
+            void WriteTestRunDuration(TimeSpan timeSpan)
+            {
+                if (timeSpan.TotalDays >= 1)
+                {
+                    FileWriter.Write(Strings.Message_DurationLabelDays, timeSpan.TotalDays);
+                }
+                else if (timeSpan.TotalHours >= 1)
+                {
+                    FileWriter.Write(Strings.Message_DurationLabelHours, timeSpan.TotalHours);
+                }
+                else if (timeSpan.TotalMinutes >= 1)
+                {
+                    FileWriter.Write(Strings.Message_DurationLabelMinutes, timeSpan.TotalMinutes);
+                }
+                else
+                {
+                    FileWriter.Write(Strings.Message_DurationLabelSeconds, timeSpan.TotalSeconds);
+                }
+            }
+        }
+
+        private void TestRunMessageEventHandler(object? _, TestRunMessageEventArgs args)
+        {
+            switch (args.Level)
+            {
+                case TestMessageLevel.Informational:
+                    if (VerbosityLevel >= Verbosity.Normal)
+                    {
+                        FileWriter.WriteLine(args.Message);
+                    }
+                    break;
+
+                case TestMessageLevel.Warning:
+                    if (VerbosityLevel >= Verbosity.Minimal)
+                    {
+                        FileWriter.WriteLine(args.Message);
+                    }
+                    break;
+
+                case TestMessageLevel.Error:
+                    FileWriter.WriteLine(args.Message);
+                    break;
+            }
+        }
+
+        private void TestRunStartEventHandler(object? _, TestRunStartEventArgs args)
+        {
+            FileWriter.WriteLine(Strings.Message_StartingTestExecution);
+
+            List<string>? sources = args.TestRunCriteria.Sources?.ToList();
+
+            if (sources?.Count > 0)
+            {
+                FileWriter.WriteLine(Strings.Message_TestSourcesToRun, sources.Count);
+
+                if (VerbosityLevel >= Verbosity.Detailed)
+                {
+                    foreach (string source in sources)
+                    {
+                        FileWriter.WriteLine(source);
+                    }
+                }
+            }
         }
 
         private void WriteDuration(TimeSpan duration)
         {
-            if (FileWriter == null)
-            {
-                return;
-            }
-
             if (duration.Hours > 0)
             {
                 FileWriter.Write(Strings.Message_TestDurationLabelHours, duration.Hours);
@@ -508,45 +486,20 @@ namespace File.TestLogger
 
         private void WriteTestOutcomeStatistics(IDictionary<TestOutcome, long> stats, TestOutcome key, string label)
         {
-            if (FileWriter == null)
-            {
-                return;
-            }
-
             if (stats.TryGetValue(key, out long number) && number > 0)
             {
                 FileWriter.WriteLine(Strings.Message_TestOutcome, label, number);
             }
         }
 
-        private void WriteTestRunDuration(TimeSpan timeSpan)
-        {
-            if (FileWriter == null)
-            {
-                return;
-            }
-
-            if (timeSpan.TotalDays >= 1)
-            {
-                FileWriter.Write(Strings.Message_DurationLabelDays, timeSpan.TotalDays);
-            }
-            else if (timeSpan.TotalHours >= 1)
-            {
-                FileWriter.Write(Strings.Message_DurationLabelHours, timeSpan.TotalHours);
-            }
-            else if (timeSpan.TotalMinutes >= 1)
-            {
-                FileWriter.Write(Strings.Message_DurationLabelMinutes, timeSpan.TotalMinutes);
-            }
-            else
-            {
-                FileWriter.Write(Strings.Message_DurationLabelSeconds, timeSpan.TotalSeconds);
-            }
-        }
-
         private class TestSourceResult
         {
+            public const int IndexFailed = 1;
+            public const int IndexPassed = 0;
+            public const int IndexSkipped = 2;
+            public const int IndexTotal = 3;
             public DateTimeOffset EndTime { get; set; } = DateTimeOffset.MinValue;
+
             public int[] Results { get; } = new int[4];
 
             public DateTimeOffset StartTime { get; set; } = DateTimeOffset.MaxValue;

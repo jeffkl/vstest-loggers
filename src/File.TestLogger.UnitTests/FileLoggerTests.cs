@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Abstractions;
 using System.IO.Abstractions.TestingHelpers;
-using System.Text;
+using System.Threading;
 using Test.Common;
 using Xunit;
 using Xunit.Abstractions;
@@ -16,6 +16,25 @@ namespace File.TestLogger.UnitTests
 {
     public class FileLoggerTests : TestBase
     {
+        public const string DefaultCurrentDirectory = @"C:\src\ProjectA";
+        public const string DefaultTestRunDirectory = @"C:\temp\TestResults";
+
+        public readonly MockEnvironmentProvider DefaultEnvironmentProvider = new(addExistingEnvironmentVariables: false)
+        {
+            CurrentDirectory = DefaultCurrentDirectory,
+            MachineName = "MachineA",
+            UserName = "UserA",
+        };
+
+        public readonly IFileSystem DefaultFileSystem = new MockFileSystem();
+
+        public readonly Dictionary<string, string?> DefaultTestRunParameters = new(StringComparer.OrdinalIgnoreCase)
+        {
+            [ParameterNames.TestRunDirectory] = DefaultTestRunDirectory,
+        };
+
+        public readonly TimeProvider DefaultTimeProvider = TimeProvider.System;
+
         public FileLoggerTests(ITestOutputHelper testOutputHelper)
             : base(testOutputHelper)
         {
@@ -28,26 +47,18 @@ namespace File.TestLogger.UnitTests
         [InlineData(Verbosity.Detailed)]
         public void CapturesDiscoveryMessages(Verbosity verbosity)
         {
-            MockEnvironmentProvider mockEnvironmentProvider = new MockEnvironmentProvider
-            {
-            };
+            const string logFilePath = @"C:\file.log";
 
-            IFileSystem fileSystem = new MockFileSystem(new Dictionary<string, MockFileData>
-            {
-                [@"C:\file.txt"] = new MockFileData("Contents"),
-            });
+            IFileSystem fileSystem = new MockFileSystem();
 
-            MockTestLoggerEvents testLoggerEvents = new MockTestLoggerEvents();
+            MockTestLoggerEvents testLoggerEvents = new();
 
-            StringTextWriter textWriter = new();
+            DefaultTestRunParameters[ParameterNames.LogFileName] = logFilePath;
+            DefaultTestRunParameters[ParameterNames.Verbosity] = verbosity.ToString();
 
-            FileLogger logger = new FileLogger(mockEnvironmentProvider, fileSystem, textWriter);
+            FileLogger logger = new(DefaultEnvironmentProvider, fileSystem, DefaultTimeProvider);
 
-            logger.Initialize(testLoggerEvents, new Dictionary<string, string?>
-            {
-                [ParameterNames.TestRunDirectory] = "C:\\temp",
-                [ParameterNames.Verbosity] = verbosity.ToString()
-            });
+            logger.Initialize(testLoggerEvents, DefaultTestRunParameters);
 
             testLoggerEvents.OnDiscoveryMessage("Informational message", TestMessageLevel.Informational);
             testLoggerEvents.OnDiscoveryMessage("Error message", TestMessageLevel.Error);
@@ -76,7 +87,7 @@ namespace File.TestLogger.UnitTests
                     attachmentSets: null,
                     elapsedTime: TimeSpan.FromSeconds(3)));
 
-            string output = textWriter;
+            string output = fileSystem.File.ReadAllText(logger.LogFile!.FullName);
 
             switch (verbosity)
             {
@@ -171,36 +182,126 @@ Total tests: 15
             }
         }
 
-        [Fact]
-        public void Test1()
+        [Theory]
+        [InlineData("True", true)]
+        [InlineData("true", true)]
+        [InlineData("false", false)]
+        [InlineData("FalSe", false)]
+        [InlineData("Invalid", null)]
+        public void InitializeSetsAppend(string value, bool? expected)
         {
-            MockEnvironmentProvider mockEnvironmentProvider = new MockEnvironmentProvider
+            DefaultTestRunParameters[ParameterNames.Append] = value;
+
+            FileLogger logger = new(DefaultEnvironmentProvider, DefaultFileSystem, DefaultTimeProvider);
+
+            logger.Initialize(NullTestLoggerEvents.Instance, DefaultTestRunParameters);
+
+            if (expected is null)
             {
-            };
-
-            IFileSystem fileSystem = new MockFileSystem(new Dictionary<string, MockFileData>
+                logger.Append.ShouldBeNull();
+            }
+            else if (expected is true)
             {
-                [@"C:\file.txt"] = new MockFileData("Contents"),
-            });
-
-            MockTestLoggerEvents testLoggerEvents = new MockTestLoggerEvents();
-
-            //TextWriter textWriter = new StringTextWriter();
-
-            TextWriter textWriter = new TestOutputHelperTextWriter(TestOutputHelper);
-
-            FileLogger logger = new FileLogger(mockEnvironmentProvider, fileSystem, textWriter);
-
-            logger.Initialize(testLoggerEvents, new Dictionary<string, string?>
+                logger.Append?.ShouldBeTrue();
+            }
+            else if (expected is false)
             {
-                ["TestRunDirectory"] = "C:\\temp"
-            });
+                logger.Append?.ShouldBeFalse();
+            }
+        }
 
-            testLoggerEvents.OnTestRunMessage("Hello World");
+        [Fact]
+        public void InitializeSetsLogFileNameDefault()
+        {
+            MockTimeProvider timeProvider = MockTimeProvider.Default;
 
-            testLoggerEvents.OnTestRunComplete(new TestRunCompleteEventArgs(new TestRunStatistics(), isCanceled: false, isAborted: false, error: null, attachmentSets: null, elapsedTime: TimeSpan.FromSeconds(3)));
+            FileLogger logger = new(DefaultEnvironmentProvider, DefaultFileSystem, timeProvider);
 
-            //string? result = textWriter.ToString();
+            logger.Initialize(NullTestLoggerEvents.Instance, DefaultTestRunParameters);
+
+            logger.LogFile.ShouldNotBeNull();
+
+            logger.LogFile.FullName.ShouldBe(DefaultFileSystem.Path.Combine(DefaultTestRunDirectory, "vstest.console.UserA_MachineA_20241017_081334841.log"));
+
+            logger.LogFile.Directory.ShouldNotBeNull();
+
+            logger.LogFile.Directory.Exists.ShouldBeTrue();
+        }
+
+        [Theory]
+        [InlineData(DefaultTestRunDirectory, "SubDirectory", "MyLogFile.log")]
+        [InlineData("AnotherDirectory", "OtherLogFile.log")]
+        public void InitializeSetsLogFileNameRelativeOrAbsolute(params string[] paths)
+        {
+            MockTimeProvider timeProvider = MockTimeProvider.Default;
+
+            FileLogger logger = new(DefaultEnvironmentProvider, DefaultFileSystem, timeProvider);
+
+            DefaultTestRunParameters[ParameterNames.LogFileName] = DefaultFileSystem.Path.Combine(paths);
+
+            logger.Initialize(NullTestLoggerEvents.Instance, DefaultTestRunParameters);
+
+            logger.LogFile.ShouldNotBeNull();
+
+            logger.LogFile.FullName.ShouldBe(DefaultFileSystem.Path.Combine(DefaultTestRunDirectory, DefaultTestRunParameters[ParameterNames.LogFileName]!));
+
+            logger.LogFile.Directory.ShouldNotBeNull();
+
+            logger.LogFile.Directory.Exists.ShouldBeTrue();
+        }
+
+        [Theory]
+        [InlineData(".NETFramework,Version=v4.7.2", "net472")]
+        [InlineData(".NETCoreApp,Version=v8.0", "net8.0")]
+        [InlineData("net472", "net472")]
+        [InlineData("invalid", null)]
+        public void InitializeSetsTargetFramework(string value, string? expected)
+        {
+            DefaultTestRunParameters[ParameterNames.TargetFramework] = value;
+
+            FileLogger logger = new(DefaultEnvironmentProvider, DefaultFileSystem, DefaultTimeProvider);
+
+            logger.Initialize(NullTestLoggerEvents.Instance, DefaultTestRunParameters);
+
+            logger.TargetFramework.ShouldBe(expected);
+        }
+
+        [Fact]
+        public void InitializeSetsTestRunDirectory()
+        {
+            FileLogger logger = new(DefaultEnvironmentProvider, DefaultFileSystem, DefaultTimeProvider);
+
+            logger.Initialize(NullTestLoggerEvents.Instance, DefaultTestRunParameters);
+
+            logger.TestRunDirectory.ShouldBe(DefaultTestRunDirectory);
+        }
+
+        [Fact]
+        public void InitializeSetsTestRunDirectoryToCurrentDirectory()
+        {
+            FileLogger logger = new(DefaultEnvironmentProvider, DefaultFileSystem, DefaultTimeProvider);
+
+            logger.Initialize(NullTestLoggerEvents.Instance, new Dictionary<string, string?>());
+
+            logger.TestRunDirectory.ShouldBe(DefaultEnvironmentProvider.CurrentDirectory);
+        }
+
+        [Theory]
+        [InlineData(nameof(Verbosity.Quiet), Verbosity.Quiet)]
+        [InlineData(nameof(Verbosity.Minimal), Verbosity.Minimal)]
+        [InlineData(nameof(Verbosity.Normal), Verbosity.Normal)]
+        [InlineData(nameof(Verbosity.Detailed), Verbosity.Detailed)]
+        [InlineData("", Verbosity.Normal)]
+        [InlineData("Invalid", Verbosity.Normal)]
+        public void InitializeSetsVerbosity(string verbosity, Verbosity expected)
+        {
+            DefaultTestRunParameters[ParameterNames.Verbosity] = verbosity;
+
+            FileLogger logger = new(DefaultEnvironmentProvider, DefaultFileSystem, DefaultTimeProvider);
+
+            logger.Initialize(NullTestLoggerEvents.Instance, DefaultTestRunParameters);
+
+            logger.VerbosityLevel.ShouldBe(expected);
         }
     }
 }

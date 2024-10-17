@@ -2,11 +2,10 @@
 using Microsoft.VisualStudio.TestPlatform.ObjectModel.Client;
 using Microsoft.VisualStudio.TestPlatform.ObjectModel.Logging;
 using System;
-using System.Threading.Tasks;
 
-namespace File.TestLogger.UnitTests
+namespace Test.Common
 {
-    internal sealed class MockTestLoggerEvents : TestLoggerEvents
+    public sealed class MockTestLoggerEvents : TestLoggerEvents
     {
         private readonly DateTimeOffset _stableEndTime;
         private readonly DateTimeOffset _stableStartTime = DateTimeOffset.Now;
