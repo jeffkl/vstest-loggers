@@ -5,6 +5,8 @@ using Shouldly;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Abstractions;
+using System.IO.Abstractions.TestingHelpers;
 using System.Text;
 using Test.Common;
 using Xunit;
@@ -30,11 +32,16 @@ namespace File.TestLogger.UnitTests
             {
             };
 
+            IFileSystem fileSystem = new MockFileSystem(new Dictionary<string, MockFileData>
+            {
+                [@"C:\file.txt"] = new MockFileData("Contents"),
+            });
+
             MockTestLoggerEvents testLoggerEvents = new MockTestLoggerEvents();
 
             StringTextWriter textWriter = new();
 
-            FileLogger logger = new FileLogger(mockEnvironmentProvider, textWriter);
+            FileLogger logger = new FileLogger(mockEnvironmentProvider, fileSystem, textWriter);
 
             logger.Initialize(testLoggerEvents, new Dictionary<string, string?>
             {
@@ -171,13 +178,18 @@ Total tests: 15
             {
             };
 
+            IFileSystem fileSystem = new MockFileSystem(new Dictionary<string, MockFileData>
+            {
+                [@"C:\file.txt"] = new MockFileData("Contents"),
+            });
+
             MockTestLoggerEvents testLoggerEvents = new MockTestLoggerEvents();
 
             //TextWriter textWriter = new StringTextWriter();
 
             TextWriter textWriter = new TestOutputHelperTextWriter(TestOutputHelper);
 
-            FileLogger logger = new FileLogger(mockEnvironmentProvider, textWriter);
+            FileLogger logger = new FileLogger(mockEnvironmentProvider, fileSystem, textWriter);
 
             logger.Initialize(testLoggerEvents, new Dictionary<string, string?>
             {

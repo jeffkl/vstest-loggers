@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.IO.Abstractions;
 using System.Linq;
 using System.Threading.Tasks.Dataflow;
 
@@ -21,17 +22,18 @@ namespace File.TestLogger
         private readonly IEnvironmentProvider _environmentProvider;
 
         private readonly ActionBlock<EventArgs> _events;
-
+        private readonly IFileSystem _fileSystem;
         private Dictionary<string, TestSourceResult>? _resultsByTestSource;
 
         public FileLogger()
-            : this(SystemEnvironmentProvider.Instance)
+            : this(SystemEnvironmentProvider.Instance, new FileSystem())
         {
         }
 
-        internal FileLogger(IEnvironmentProvider environmentProvider, TextWriter? fileWriter = null, TextWriter? consoleOut = null, TextWriter? consoleError = null)
+        internal FileLogger(IEnvironmentProvider environmentProvider, IFileSystem fileSystem, TextWriter? fileWriter = null, TextWriter? consoleOut = null, TextWriter? consoleError = null)
         {
-            _environmentProvider = environmentProvider;
+            _environmentProvider = environmentProvider ?? throw new ArgumentNullException(nameof(environmentProvider));
+            _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
 
             FileWriter = fileWriter;
             ConsoleOut = consoleOut ?? Console.Out;
@@ -53,11 +55,12 @@ namespace File.TestLogger
 
         internal TextWriter? FileWriter { get; private set; }
 
-        internal FileInfo? LogFile { get; private set; }
+        internal IFileInfo? LogFile { get; private set; }
 
         internal string? TargetFramework { get; private set; }
 
         internal string? TestRunDirectory { get; private set; }
+
         internal Verbosity VerbosityLevel { get; private set; } = Verbosity.Normal;
 
         public void Initialize(TestLoggerEvents events, Dictionary<string, string?> parameters)
@@ -68,8 +71,8 @@ namespace File.TestLogger
             }
 
             SetProperties(parameters);
-
-            FileWriter ??= new StreamWriter(new FileStream(LogFile!.FullName, Append ? FileMode.Append : FileMode.Create));
+            
+            FileWriter ??= new StreamWriter(_fileSystem.FileStream.New(LogFile!.FullName, Append ? FileMode.Append : FileMode.Create));
 
             events.DiscoveryMessage += (_, args) => _events.Post(args);
             events.TestResult += (_, args) => _events.Post(args);
@@ -112,7 +115,7 @@ namespace File.TestLogger
                 logFileName = string.Format(Strings.DefaultLogFileName, _environmentProvider.UserName, _environmentProvider.MachineName, DateTime.Now);
             }
 
-            LogFile = new FileInfo(Path.Combine(TestRunDirectory, logFileName));
+            LogFile = _fileSystem.FileInfo.New(Path.Combine(TestRunDirectory, logFileName));
 
             if (parameters.TryGetValue(ParameterNames.TargetFramework, out string? targetFrameworkString))
             {
