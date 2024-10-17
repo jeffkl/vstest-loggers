@@ -7,10 +7,10 @@ namespace Test.Common
     {
         public TestBase(ITestOutputHelper testOutput)
         {
-            TestOutput = testOutput;
+            TestOutputHelper = testOutput;
         }
 
-        public ITestOutputHelper TestOutput { get; }
+        public ITestOutputHelper TestOutputHelper { get; }
 
         public virtual void Dispose()
         {
