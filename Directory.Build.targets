@@ -1,0 +1,15 @@
+<Project>
+    <PropertyGroup>
+    <Authors>jeffkl</Authors>
+    <Copyright>Copyright ©. All rights reserved.</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/jeffkl/vstest-loggers</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jeffkl/vstest-loggers.git</RepositoryUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <RepositoryType>Git</RepositoryType>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+    <ItemGroup>
+    <InternalsVisibleTo Update="@(InternalsVisibleTo)" Key="0024000004800000940000000602000000240000525341310004000001000100513D989AD56F80111D6AEE9F07515606E4C97FA283CE8BB2BFB7C4BEF72572AACB225733B51EACD6F257DECCAF0CF4D186905351D8A4A259FCAEFAB10684342B8E89850CC063B8E57B882FB351256FAC5AEDE9556C68B5C2D214A4014F4EFC0D9C33A2C2DEFC18DA338798D3C0E5792A7AE97F095643E8D542B86F0CC66A99CC" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,17 @@
+﻿{
+  "$schema": "https://github.com/dotnet/Nerdbank.GitVersioning/raw/refs/heads/main/src/NerdBank.GitVersioning/version.schema.json",
+  "version": "1.0-preview",
+  "assemblyVersion": "1.0",
+  "versionHeightOffset": -1,
+  "nugetPackageVersion": {
+    "semVer": 2
+  },
+  "publicReleaseRefSpec": [
+    "^refs/tags/v\\d+\\.\\d+\\.\\d+"
+  ],
+  "cloudBuild": {
+    "buildNumber": {
+      "enabled": true
+    }
+  }
+}

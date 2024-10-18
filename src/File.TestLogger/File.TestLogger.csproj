@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <Description>Provides a logger for the Visual Studio Test Platform that writes output to a file.</Description>
+    <ArtifactsPath>$(BaseArtifactsPath)\$(MSBuildProjectName)\</ArtifactsPath>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="EnvironmentAbstractions" />
+    <PackageReference Include="EnvironmentAbstractions.BannedApiAnalyzer" />
+    <PackageReference Include="Microsoft.Bcl.TimeProvider" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
+    <PackageReference Include="Microsoft.TestPlatform.ObjectModel" ExcludeAssets="Runtime" />
+    <PackageReference Include="System.IO.Abstractions" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="README.md" />
+    <None Include="version.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="File.TestLogger.UnitTests" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Update="Strings.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Strings.resx</DependentUpon>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Update="Strings.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Strings.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+  </ItemGroup>
+</Project>
