@@ -3,12 +3,11 @@
     <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <Description>Provides a logger for the Visual Studio Test Platform that writes output to a file.</Description>
     <ArtifactsPath>$(BaseArtifactsPath)\$(MSBuildProjectName)\</ArtifactsPath>
-    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="EnvironmentAbstractions" />
-    <PackageReference Include="EnvironmentAbstractions.BannedApiAnalyzer" PrivateAssets="All" />
+    <PackageReference Include="EnvironmentAbstractions.BannedApiAnalyzer" />
     <PackageReference Include="Microsoft.Bcl.TimeProvider" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
     <PackageReference Include="Microsoft.TestPlatform.ObjectModel" ExcludeAssets="Runtime" />
     <PackageReference Include="System.IO.Abstractions" />
