@@ -21,6 +21,17 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "File.TestLogger.UnitTests",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test.Common", "src\Test.Common\Test.Common.csproj", "{F965CD47-299B-4E4B-82B5-1F918BCCA37D}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{8B346E1B-2B7A-4FE6-86BF-EEC69AB53BF4}"
+	ProjectSection(SolutionItems) = preProject
+		.github\dependabot.yml = .github\dependabot.yml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{05D99DED-A79F-4D2A-BC96-18F2AC8A37E2}"
+	ProjectSection(SolutionItems) = preProject
+		.github\workflows\CI.yml = .github\workflows\CI.yml
+		.github\workflows\Official.yml = .github\workflows\Official.yml
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -42,5 +53,9 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{8B346E1B-2B7A-4FE6-86BF-EEC69AB53BF4} = {401AB9B2-F647-42D3-9BB4-127D20967178}
+		{05D99DED-A79F-4D2A-BC96-18F2AC8A37E2} = {8B346E1B-2B7A-4FE6-86BF-EEC69AB53BF4}
 	EndGlobalSection
 EndGlobal
