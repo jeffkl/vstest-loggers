@@ -4,10 +4,10 @@ using Microsoft.VisualStudio.TestPlatform.ObjectModel.Logging;
 using Shouldly;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.IO.Abstractions;
 using System.IO.Abstractions.TestingHelpers;
-using System.Threading;
+using System.Linq;
+using System.Runtime.InteropServices;
 using Test.Common;
 using Xunit;
 using Xunit.Abstractions;
@@ -16,14 +16,16 @@ namespace File.TestLogger.UnitTests
 {
     public class FileLoggerTests : TestBase
     {
-        public const string DefaultCurrentDirectory = @"C:\src\ProjectA";
-        public const string DefaultTestRunDirectory = @"C:\temp\TestResults";
+        public const string DefaultMachineName = "MachineA";
+        public const string DefaultUserName = "UserA";
+        public static readonly string DefaultCurrentDirectory;
+        public static readonly string DefaultTestRunDirectory;
 
         public readonly MockEnvironmentProvider DefaultEnvironmentProvider = new(addExistingEnvironmentVariables: false)
         {
             CurrentDirectory = DefaultCurrentDirectory,
-            MachineName = "MachineA",
-            UserName = "UserA",
+            MachineName = DefaultMachineName,
+            UserName = DefaultUserName,
         };
 
         public readonly IFileSystem DefaultFileSystem = new MockFileSystem();
@@ -34,6 +36,13 @@ namespace File.TestLogger.UnitTests
         };
 
         public readonly TimeProvider DefaultTimeProvider = TimeProvider.System;
+
+        static FileLoggerTests()
+        {
+            DefaultTestRunDirectory = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? @"C:\temp\TestResults" : "//tmp/TestResults";
+
+            DefaultCurrentDirectory = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? @"C:\temp" : "//tmp";
+        }
 
         public FileLoggerTests(ITestOutputHelper testOutputHelper)
             : base(testOutputHelper)
@@ -221,7 +230,7 @@ Total tests: 15
 
             logger.LogFile.ShouldNotBeNull();
 
-            logger.LogFile.FullName.ShouldBe(DefaultFileSystem.Path.Combine(DefaultTestRunDirectory, "vstest.console.UserA_MachineA_20241017_081334841.log"));
+            logger.LogFile.FullName.ShouldBe(DefaultFileSystem.Path.Combine(DefaultTestRunDirectory, string.Format(Strings.DefaultLogFileName, DefaultUserName, DefaultMachineName, timeProvider.GetLocalNow())));
 
             logger.LogFile.Directory.ShouldNotBeNull();
 
@@ -229,15 +238,20 @@ Total tests: 15
         }
 
         [Theory]
-        [InlineData(DefaultTestRunDirectory, "SubDirectory", "MyLogFile.log")]
+        [InlineData(null, "SubDirectory", "MyLogFile.log")]
         [InlineData("AnotherDirectory", "OtherLogFile.log")]
-        public void InitializeSetsLogFileNameRelativeOrAbsolute(params string[] paths)
+        public void InitializeSetsLogFileNameRelativeOrAbsolute(params string?[] paths)
         {
             MockTimeProvider timeProvider = MockTimeProvider.Default;
 
             FileLogger logger = new(DefaultEnvironmentProvider, DefaultFileSystem, timeProvider);
 
-            DefaultTestRunParameters[ParameterNames.LogFileName] = DefaultFileSystem.Path.Combine(paths);
+            if (paths[0] == null)
+            {
+                paths[0] = DefaultTestRunDirectory;
+            }
+
+            DefaultTestRunParameters[ParameterNames.LogFileName] = DefaultFileSystem.Path.Combine(paths.Select(i => i!).ToArray());
 
             logger.Initialize(NullTestLoggerEvents.Instance, DefaultTestRunParameters);
 
