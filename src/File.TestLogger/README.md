@@ -1,4 +1,6 @@
 ﻿# VS Test File Logger
+![NuGet Version](https://img.shields.io/nuget/v/File.TestLogger)
+
 This is a logger for the Visual Studio Test Platform that writes to a file.
 
 ## Usage
