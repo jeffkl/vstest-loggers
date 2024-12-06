@@ -34,10 +34,9 @@ namespace File.TestLogger
         {
         }
 
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
-
+#pragma warning disable CS8618 // FileWriter will be initialized in Initialize method
         internal FileLogger(IEnvironmentProvider environmentProvider, IFileSystem fileSystem, TimeProvider timeProvider)
-#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
+#pragma warning restore CS8618
         {
             _environmentProvider = environmentProvider ?? throw new ArgumentNullException(nameof(environmentProvider));
             _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
