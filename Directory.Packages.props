@@ -6,7 +6,7 @@
     <PackageVersion Include="EnvironmentAbstractions" Version="5.0.0" />
     <PackageVersion Include="EnvironmentAbstractions.BannedApiAnalyzer" Version="5.0.0" />
     <PackageVersion Include="EnvironmentAbstractions.TestHelpers" Version="5.0.0" />
-    <PackageVersion Include="Microsoft.Bcl.TimeProvider" Version="9.0.2" />
+    <PackageVersion Include="Microsoft.Bcl.TimeProvider" Version="9.0.3" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageVersion Include="Microsoft.TestPlatform.ObjectModel" Version="17.12.0" />
     <PackageVersion Include="Shouldly" Version="4.3.0" />
